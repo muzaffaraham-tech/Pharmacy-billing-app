@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>फार्मेसी QR बिलिंग और इन्वेंटरी</title>
+    <script src="https://jsdelivr.net"></script>
+    <script src="https://cloudflare.com"></script>
+    <script src="https://unpkg.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans">
+    <div class="max-w-7xl mx-auto p-4">
+        <header class="bg-blue-600 text-white p-4 rounded-xl shadow-md mb-6 flex justify-between items-center">
+            <h1 class="text-2xl font-bold">💊 मेरी फार्मेसी ERP</h1>
+            <span class="bg-blue-700 px-3 py-1 rounded text-sm font-semibold">100% फ्री & ऑफलाइन</span>
+        </header>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            <div class="bg-red-50 border-l-4 border-red-500 p-4 rounded-r-xl shadow-sm">
+                <h3 class="text-red-700 font-bold text-lg mb-2">🔴 एक्सपायर्ड दवाएं (Expired)</h3>
+                <ul id="expiredList" class="list-disc pl-5 text-sm text-red-600 space-y-1"></ul>
+            </div>
+            <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-xl shadow-sm">
+                <h3 class="text-amber-700 font-bold text-lg mb-2">🟡 जल्द एक्सपायर होने वाली (Next 30 Days)</h3>
+                <ul id="nearExpiryList" class="list-disc pl-5 text-sm text-amber-600 space-y-1"></ul>
+            </div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="lg:col-span-1 space-y-6">
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-bold text-slate-700 mb-4 border-b pb-2">➕ नई दवा जोड़ें</h2>
+                    <form id="medicineForm" class="space-y-3 text-sm">
+                        <div>
+                            <label class="block font-medium mb-1">दवा का नाम</label>
+                            <input type="text" id="medName" required class="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block font-medium mb-1">बैच नंबर (Batch)</label>
+                                <input type="text" id="medBatch" required class="w-full p-2 border rounded">
+                            </div>
+                            <div>
+                                <label class="block font-medium mb-1">एक्सपायरी डेट</label>
+                                <input type="date" id="medExpiry" required class="w-full p-2 border rounded">
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="block font-medium mb-1">एमआरपी (₹)</label>
+                                <input type="number" id="medPrice" step="0.01" required class="w-full p-2 border rounded">
+                            </div>
+                            <div>
+                                <label class="block font-medium mb-1">स्टॉक मात्रा (Qty)</label>
+                                <input type="number" id="medQty" required class="w-full p-2 border rounded">
+                            </div>
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded font-bold transition">स्टॉक में जोड़ें और QR बनाएं</button>
+                    </form>
+                </div>
+                <div id="qrContainerBox" class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 hidden text-center">
+                    <h3 class="font-bold text-slate-700 mb-2">Generated QR Code</h3>
+                    <p id="qrMedName" class="text-sm font-semibold text-blue-600 mb-3"></p>
+                    <div id="qrcode" class="flex justify-center my-2"></div>
+                    <button onclick="window.print()" class="mt-3 text-xs bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1 rounded">प्रिंट करें</button>
+                </div>
+            </div>
+            <div class="lg:col-span-2 space-y-6">
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-bold text-slate-700 mb-4 border-b pb-2">🔍 तेज़ बिलिंग काउंटर (QR Scanner)</h2>
+                    <div class="flex flex-col sm:flex-row items-center gap-4">
+                        <button onclick="startScanner()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded font-bold flex items-center gap-2">📷 कैमरा स्कैनर चालू करें</button>
+                        <button onclick="stopScanner()" class="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded font-bold hidden" id="stopScanBtn">🛑 कैमरा बंद करें</button>
+                    </div>
+                    <div id="scanner-reader" class="mt-4 rounded-lg overflow-hidden max-w-sm mx-auto"></div>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-bold text-slate-700 mb-4 border-b pb-2 flex justify-between items-center">
+                        <span>🧾 ग्राहक का बिल (Current Invoice)</span>
+                        <button onclick="clearInvoice()" class="text-xs text-red-500 hover:underline">बिल साफ करें</button>
+                    </h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-600 uppercase font-semibold">
+                                    <th class="p-3">दवा का नाम</th>
+                                    <th class="p-3">बैच</th>
+                                    <th class="p-3">एक्सपायरी</th>
+                                    <th class="p-3 text-right">प्राइस</th>
+                                    <th class="p-3 text-center">मात्रा</th>
+                                    <th class="p-3 text-right">कुल</th>
+                                </tr>
+                            </thead>
+                            <tbody id="invoiceItems"></tbody>
+                        </table>
+                    </div>
+                    <div class="mt-6 border-t pt-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+                        <div class="text-xl font-bold text-slate-800">कुल अमाउंट: <span class="text-emerald-600" id="grandTotal">₹0.00</span></div>
+                        <button onclick="printInvoice()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-bold shadow transition">🖨️ बिल प्रिंट / PDF सेव करें</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        let inventory = JSON.parse(localStorage.getItem('pharmacy_inventory')) || [];
+        let currentInvoice = [];
+        let html5QrcodeScanner = null;
+        document.addEventListener("DOMContentLoaded", () => {
+            checkExpiries();
+            document.getElementById('medicineForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const name = document.getElementById('medName').value;
+                const batch = document.getElementById('medBatch').value;
+                const expiry = document.getElementById('medExpiry').value;
+                const price = parseFloat(document.getElementById('medPrice').value);
+                const qty = parseInt(document.getElementById('medQty').value);
+                const id = 'MED-' + Date.now();
+                const newMed = { id, name, batch, expiry, price, qty };
+                inventory.push(newMed);
+                localStorage.setItem('pharmacy_inventory', JSON.stringify(inventory));
+                generateMedicineQR(newMed);
+                checkExpiries();
+                this.reset();
+                alert(`दवा "${name}" सफलतापूर्वक स्टॉक में जुड़ गई है!`);
+            });
+        });
+        function checkExpiries() {
+            const expiredList = document.getElementById('expiredList');
+            const nearExpiryList = document.getElementById('nearExpiryList');
+            expiredList.innerHTML = ''; nearExpiryList.innerHTML = '';
+            const today = new Date();
+            const next30Days = new Date();
+            next30Days.setDate(today.getDate() + 30);
+            let hasExpired = false; let hasNearExpiry = false;
+            inventory.forEach(item => {
+                const expiryDate = new Date(item.expiry);
+                if (expiryDate < today) {
+                    hasExpired = true;
+                    expiredList.innerHTML += `<li><strong>${item.name}</strong> (बैच: ${item.batch}) - Expired on ${item.expiry}</li>`;
+                } else if (expiryDate >= today && expiryDate <= next30Days) {
+                    hasNearExpiry = true;
+                    nearExpiryList.innerHTML += `<li><strong>${item.name}</strong> (बैच: ${item.batch}) - Expiring soon: ${item.expiry}</li>`;
+                }
+            });
+            if (!hasExpired) expiredList.innerHTML = '<li class="text-slate-500 list-none">कोई दवा एक्सपायर्ड नहीं है। 👍</li>';
+            if (!hasNearExpiry) nearExpiryList.innerHTML = '<li class="text-slate-500 list-none">अगले 30 दिनों में कोई दवा एक्सपायर नहीं हो रही है। 👍</li>';
+        }
+        function generateMedicineQR(med) {
+            const qrContainer = document.getElementById('qrcode');
+            qrContainer.innerHTML = '';
+            document.getElementById('qrContainerBox').classList.remove('hidden');
+            document.getElementById('qrMedName').innerText = med.name + " (" + med.batch + ")";
